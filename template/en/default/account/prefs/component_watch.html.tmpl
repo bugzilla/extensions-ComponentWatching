@@ -1,0 +1,261 @@
+[%# This Source Code Form is subject to the terms of the Mozilla Public
+  # License, v. 2.0. If a copy of the MPL was not distributed with this
+  # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+  #
+  # This Source Code Form is "Incompatible With Secondary Licenses", as
+  # defined by the Mozilla Public License, v. 2.0.
+  #%]
+
+[%# initialise product to component mapping #%]
+
+[% SET selectable_products = user.get_selectable_products %]
+[% SET dont_show_button = 1 %]
+
+<style>
+#add_compwatch input[type=text],
+#add_compwatch select
+{
+  width: 30em;
+}
+
+#component[disabled] {
+  color: silver;
+}
+</style>
+
+<script>
+var Dom = YAHOO.util.Dom;
+var useclassification = false;
+var first_load = true;
+var last_sel = [];
+var cpts = new Array();
+var watch_users = new Array();
+[% n = 0 %]
+[% FOREACH prod = selectable_products %]
+  cpts['[% n %]'] = [
+    [%- FOREACH comp = prod.components %]'[% comp.name FILTER js %]'[% ", " UNLESS loop.last %] [%- END -%] ];
+  [% n = n + 1 %]
+  [% FOREACH comp = prod.components %]
+    [% IF comp.watch_user %]
+      if (!watch_users['[% prod.name FILTER js %]'])
+        watch_users['[% prod.name FILTER js %]'] = new Array();
+      watch_users['[% prod.name FILTER js %]']['[% comp.name FILTER js %]'] = '[% comp.watch_user.login FILTER js %]';
+    [% END %]
+  [% END %]
+[% END %]
+</script>
+<script type="text/javascript" src="[% 'js/productform.js' FILTER mtime FILTER html %]">
+</script>
+
+<script>
+function onSelectProduct() {
+  var component = Dom.get('component');
+  selectProduct(Dom.get('product'), component);
+  // selectProduct only supports __Any__ on both elements
+  // we only want it on component, so add it back in
+  try {
+    component.add(new Option('__Any__', ''), component.options[0]);
+  } catch(e) {
+    // support IE
+    component.add(new Option('__Any__', ''), 0);
+  }
+  if ('[% add_component FILTER js %]' != ''
+      && bz_valueSelected(Dom.get('product'), '[% add_product FILTER js %]')
+  ) {
+    var index = bz_optionIndex(Dom.get('component'), '[% add_component FILTER js %]');
+    if (index != -1)
+      Dom.get('component').options[index].selected = true;
+  }
+  onSelectComponent();
+}
+
+function onSelectComponent() {
+  var product_select = Dom.get('product');
+  var product = product_select.options[product_select.selectedIndex].value;
+  var component = Dom.get('component').value;
+  if (component && watch_users[product] && watch_users[product][component]) {
+    Dom.get('watch-user-email').innerHTML = watch_users[product][component];
+    Dom.get('watch-user-div').style.display = '';
+  } else {
+    Dom.get('watch-user-div').style.display = 'none';
+  }
+  Dom.get('add').disabled = Dom.get('component').selectedIndex == -1;
+}
+
+function onStartingWith(el) {
+  var value = el.value.replace(/(^\s*|\s*$)/g, '');
+  if (value == '') {
+    Dom.get('component').disabled = false;
+    onSelectProduct();
+  } else {
+    Dom.get('component').selectedIndex = -1;
+    Dom.get('watch-user-div').style.display = 'none';
+    Dom.get('component').disabled = true;
+    Dom.get('add').disabled = false;
+  }
+}
+
+YAHOO.util.Event.onDOMReady(onSelectProduct);
+
+function onRemoveChange() {
+  var cbs = Dom.get('remove_table').getElementsByTagName('input');
+  for (var i = 0, l = cbs.length; i < l; i++) {
+    if (cbs[i].checked) {
+      Dom.get('remove').disabled = false;
+      return;
+    }
+  }
+  Dom.get('remove').disabled = true;
+}
+
+YAHOO.util.Event.onDOMReady(onRemoveChange);
+
+</script>
+
+<p>
+  Select the components you want to watch.<br>
+  To watch all components in a product, watch "__Any__".<br>
+  Watching components starting with "Developer Tools" is the same as watching
+  "Developer Tools", "Developer Tools: Console", "Developer Tools: Debugger",
+  etc.  If a new component is added which starts with "Developer Tools", you'll
+  automatically start watching that too.
+  <br>
+  Use <a href="userprefs.cgi?tab=email">Email Preferences</a> to filter which
+  notification emails you receive.
+</p>
+
+<table border="0" cellpadding="3" cellspacing="0" id="add_compwatch">
+<tr>
+  <th align="right">Product:</th>
+  <td colspan="2">
+    <select name="add_product" id="product" onChange="onSelectProduct()">
+    [% FOREACH product IN selectable_products %]
+      <option [% 'selected' IF add_product == product.name %]>
+        [%~ product.name FILTER html %]</option>
+    [% END %]
+    </select>
+  </td>
+</tr>
+<tr>
+  <th align="right" valign="top">Component:</th>
+  <td>Select the component(s) to add to your watch list:</td>
+</tr>
+<tr>
+  <td></td>
+  <td>
+    <select name="add_component" id="component" multiple size="5" onChange="onSelectComponent()">
+      <option value="">__Any__</option>
+    [% FOREACH product IN selectable_products %]
+      [% FOREACH component IN product.components %]
+        <option [% 'selected' IF add_component == component.name %]>
+          [%~ component.name FILTER html %]</option>
+      [% END %]
+    [% END %]
+    </select><br>
+    Or watch components starting with:<br>
+    <input type="text" name="add_starting" id="add_starting" maxlength="64"
+           onKeyUp="onStartingWith(this)" onBlur="onStartingWith(this)">
+  </td>
+  <td valign="top">
+    <div id="watch-user-div"
+         title="You can also watch a component by following this user. [% ~%]
+                CC'ing this user on a [% terms.bug %] will trigger notifications to all watchers of this component."
+         style="cursor:help">
+      Watch User: <span id="watch-user-email"></span>
+    </div>
+  </td>
+</tr>
+<tr>
+  <td>&nbsp;</td>
+  <td><input type="submit" id="add" name="add" value="Add"></td>
+</tr>
+</table>
+
+<hr>
+<p>
+  You are currently watching:
+</p>
+
+[% IF watches.size %]
+
+  <table border="0" cellpadding="3" cellspacing="0" id="remove_table">
+  <tr>
+    <td>&nbsp;</td>
+    <td><b>Product</b></td>
+    <td>&nbsp;<b>Component</b></td>
+  </tr>
+  [% FOREACH watch IN watches %]
+    <tr>
+      <td>
+        <input type="checkbox" onChange="onRemoveChange()"
+               id="cwdel_[% watch.id FILTER none %]"
+               name="del_watch" value="[% watch.id FILTER none %]">
+      </td>
+      <td>
+        <label for="cwdel_[% watch.id FILTER none %]">
+          [% watch.product.name FILTER html %]
+        </label>
+      </td>
+      <td>&nbsp;
+        [% IF (watch.component) %]
+          <a href="buglist.cgi?product=[% watch.product.name FILTER uri ~%]
+                  &component=[% watch.component.name FILTER uri %]&resolution=---">
+          [% watch.component.name FILTER html %]
+          </a>
+        [% ELSIF watch.component_prefix %]
+          <i>starts with:</i> [% watch.component_prefix FILTER html %]
+        [% ELSE %]
+          <a href="describecomponents.cgi?product=[% watch.product.name FILTER uri %]">
+          __Any__
+          </a>
+        [% END %]
+      </td>
+    </tr>
+  [% END %]
+  </table>
+
+  <input id="remove" type="submit" value="Remove Selected">
+
+[% ELSE %]
+
+  <p>
+    <i>You are not watching any components directly.</i>
+  </p>
+
+[% END %]
+
+[% IF user_watches.size %]
+
+  <hr>
+  <p>
+    [% watches.size ? "In addition," : "However," %]
+    you are watching the following components by watching users:
+  </p>
+
+  <table border="0" cellpadding="3" cellspacing="0">
+  <tr>
+    <td><b>User</b></td>
+    <td>&nbsp;<b>Product</b></td>
+    <td>&nbsp;<b>Component</b></td>
+  </tr>
+  [% FOREACH watch IN user_watches %]
+    <tr>
+      <td>[% watch.user.login FILTER html %]</td>
+      <td>&nbsp;[% watch.component.product.name FILTER html %]</td>
+      <td>&nbsp;
+        <a href="buglist.cgi?product=[% watch.product.name FILTER uri ~%]
+                &component=[% watch.component.name FILTER uri %]&resolution=---">
+        [% watch.component.name FILTER html %]
+        </a>
+      </td>
+    </tr>
+  [% END %]
+  </table>
+
+  <p>
+    Use <a href="userprefs.cgi?tab=email#new_watched_by_you">Email Preferences</a>
+    to manage this list.
+  </p>
+
+[% END %]
+
