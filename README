@@ -1,0 +1,16 @@
+IMPORTANT: this extension will break your Bugzilla unless you have the 3-line
+patch from https://bugzilla.mozilla.org/show_bug.cgi?id=1082106 .
+
+If you are running any of the following versions or later, you are OK:
+
+* trunk after 2014-10-24
+* 5.0
+* 4.5.7
+* 4.4.7
+
+You will need to apply it to all installations running 4.2 or earlier.
+
+*******************************************************************************
+You need to apply the patch _before_ running checksetup.pl. Failure to do so
+will break your Bugzilla, and applying it afterwards won't un-break it.
+*******************************************************************************
